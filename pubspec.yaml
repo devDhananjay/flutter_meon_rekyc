@@ -1,0 +1,27 @@
+name: flutter_meon_rekyc
+description: Re-KYC SDK for Flutter with company login and deeplink WebView flow
+version: 2.0.0
+homepage: https://github.com/devDhananjay/flutter-meon-rekyc
+repository: https://github.com/devDhananjay/flutter-meon-rekyc
+issue_tracker: https://github.com/devDhananjay/flutter-meon-rekyc/issues
+
+environment:
+  sdk: '>=3.0.0 <4.0.0'
+  flutter: '>=3.10.0'
+
+dependencies:
+  flutter:
+    sdk: flutter
+  http: ^1.2.0
+  webview_flutter: ^4.10.0
+  webview_flutter_android: ^4.0.0
+  webview_flutter_wkwebview: ^3.15.0
+  permission_handler: ^11.3.1
+  app_settings: ^5.1.1
+
+dev_dependencies:
+  flutter_test:
+    sdk: flutter
+  flutter_lints: ^5.0.0
+
+flutter:
