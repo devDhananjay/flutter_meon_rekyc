@@ -1,3 +1,8 @@
+## 2.0.1
+
+- Show API `msg` when deeplink is missing (e.g. `Client is Freezed`) instead of generic errors.
+- Support `success: true` with top-level `msg` and no `data.deeplink` (same as react-native-meon-rekyc 1.0.15).
+
 ## 2.0.0
 
 - Complete rewrite aligned with [react-native-meon-rekyc](https://www.npmjs.com/package/react-native-meon-rekyc).

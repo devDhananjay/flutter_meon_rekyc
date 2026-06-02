@@ -1,5 +1,6 @@
 import 'dart:convert';
 
+import 'package:flutter/foundation.dart';
 import 'package:http/http.dart' as http;
 
 const String defaultBaseUrl = 'https://rekyc.meon.co.in';
@@ -46,6 +47,12 @@ class ReKycSessionResult {
   final Map<String, dynamic>? deeplinkRaw;
 }
 
+void _logApi(String label, Object? payload) {
+  if (kDebugMode) {
+    debugPrint('[MeonReKYC API] $label $payload');
+  }
+}
+
 Map<String, dynamic> _parseJsonResponse(http.Response response) {
   final text = response.body;
   if (text.isEmpty) {
@@ -58,14 +65,66 @@ Map<String, dynamic> _parseJsonResponse(http.Response response) {
   }
 }
 
+String _apiMessage(Map<String, dynamic> data, String fallback) {
+  final candidates = [
+    data['msg'],
+    data['message'],
+    data['error'],
+    data['data'] is Map ? (data['data'] as Map)['msg'] : null,
+    data['data'] is Map ? (data['data'] as Map)['message'] : null,
+  ];
+  for (final value in candidates) {
+    if (value != null && value.toString().trim().isNotEmpty) {
+      return value.toString();
+    }
+  }
+  return fallback;
+}
+
+String? _extractDeeplink(Map<String, dynamic> data) {
+  final payload = data['data'];
+  if (payload is Map<String, dynamic>) {
+    final nested = payload['deeplink'] ?? payload['deep_link'];
+    if (nested != null && nested.toString().trim().isNotEmpty) {
+      return nested.toString();
+    }
+  }
+
+  final topLevel = data['deeplink'] ?? data['deep_link'];
+  if (topLevel != null && topLevel.toString().trim().isNotEmpty) {
+    return topLevel.toString();
+  }
+
+  return null;
+}
+
+bool _isApiSuccess(Map<String, dynamic> data, http.Response response) {
+  if (response.statusCode < 200 || response.statusCode >= 300) {
+    return false;
+  }
+  if (data['success'] == true) {
+    return true;
+  }
+  if (data['success']?.toString() == 'true') {
+    return true;
+  }
+  if (data['status']?.toString().toLowerCase() == 'success') {
+    return true;
+  }
+  return false;
+}
+
 Future<CompanyLoginResult> companyLogin({
   required String username,
   required String password,
   required String companyId,
   String baseUrl = defaultBaseUrl,
 }) async {
+  final loginUrl = '$baseUrl/v1/company/company-login';
+  _logApi('REQUEST company-login', loginUrl);
+
   final response = await http.post(
-    Uri.parse('$baseUrl/v1/company/company-login'),
+    Uri.parse(loginUrl),
     headers: {
       'Accept': 'application/json',
       'Content-Type': 'application/json',
@@ -78,22 +137,20 @@ Future<CompanyLoginResult> companyLogin({
   );
 
   final data = _parseJsonResponse(response);
-  final success = data['success'] == true;
+  _logApi('RESPONSE company-login', data);
 
-  if (response.statusCode < 200 ||
-      response.statusCode >= 300 ||
-      !success) {
-    throw Exception(data['msg']?.toString() ?? 'Company login failed');
+  if (!_isApiSuccess(data, response)) {
+    throw Exception(_apiMessage(data, 'Company login failed'));
   }
 
   final payload = data['data'];
   if (payload is! Map<String, dynamic>) {
-    throw Exception('Invalid login response');
+    throw Exception(_apiMessage(data, 'Invalid login response'));
   }
 
   final accessToken = payload['access_token']?.toString();
   if (accessToken == null || accessToken.isEmpty) {
-    throw Exception('Access token not found in login response');
+    throw Exception(_apiMessage(data, 'Access token not found in login response'));
   }
 
   return CompanyLoginResult(
@@ -115,6 +172,8 @@ Future<DeepLinkResult> getDeepLink({
   final url =
       '$baseUrl/v1/company/get_deep_link/$encodedWorkflowId/$encodedClientCode';
 
+  _logApi('REQUEST get_deep_link', url);
+
   final response = await http.get(
     Uri.parse(url),
     headers: {
@@ -124,22 +183,20 @@ Future<DeepLinkResult> getDeepLink({
   );
 
   final data = _parseJsonResponse(response);
-  final success = data['success'] == true;
+  final deeplink = _extractDeeplink(data);
 
-  if (response.statusCode < 200 ||
-      response.statusCode >= 300 ||
-      !success) {
-    throw Exception(data['msg']?.toString() ?? 'Failed to generate deeplink');
+  _logApi('RESPONSE get_deep_link', {
+    'msg': data['msg'],
+    'deeplink': deeplink,
+    'full': data,
+  });
+
+  if (!_isApiSuccess(data, response)) {
+    throw Exception(_apiMessage(data, 'Failed to generate deeplink'));
   }
 
-  final payload = data['data'];
-  if (payload is! Map<String, dynamic>) {
-    throw Exception('Invalid deeplink response');
-  }
-
-  final deeplink = payload['deeplink']?.toString();
   if (deeplink == null || deeplink.isEmpty) {
-    throw Exception('Deeplink URL not found in response');
+    throw Exception(_apiMessage(data, 'Deeplink URL not found in response'));
   }
 
   return DeepLinkResult(deeplink: deeplink, raw: data);
@@ -153,6 +210,14 @@ Future<ReKycSessionResult> initializeReKycSession({
   required String clientCode,
   String baseUrl = defaultBaseUrl,
 }) async {
+  _logApi('initializeReKycSession start', {
+    'baseUrl': baseUrl,
+    'workflowId': workflowId,
+    'clientCode': clientCode,
+    'companyId': companyId,
+    'username': username,
+  });
+
   final loginResult = await companyLogin(
     username: username,
     password: password,
@@ -166,6 +231,8 @@ Future<ReKycSessionResult> initializeReKycSession({
     accessToken: loginResult.accessToken,
     baseUrl: baseUrl,
   );
+
+  _logApi('initializeReKycSession done', deeplinkResult.deeplink);
 
   return ReKycSessionResult(
     accessToken: loginResult.accessToken,
